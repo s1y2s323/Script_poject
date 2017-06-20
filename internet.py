@@ -5,14 +5,23 @@ import urllib
 import urllib.request
 
 
-
 server = "api.visitkorea.or.kr"
+
 regKey='nPSDIXgi3zg%2BhHUuuE6%2Fa3MirmFbhh%2BtwN1N8jRjCrs8dgXn8Wp3b9g190zHZGXqgo8DxqgcgK1fq2AjFXdJbg%3D%3D'
 DataList=[]
+DetailDataList=[]
 conn = None
 
 host = "smtp.gmail.com"  # Gmail SMTP 서버 주소.
 port = "587"
+
+
+def userDetailURIBuilder(server,**user):
+    str="http://" + server + "/openapi" + "/service" +"/rest"+"/KorService"+"/detailCommon?"
+
+    for key in user.keys():
+        str += key + "=" + user[key] + "&"
+    return str
 
 
 def userURIBuilder(server, **user):
@@ -28,6 +37,53 @@ def connectOpenAPIServer():
     conn = HTTPConnection(server)
 
 #areaCode=1&numOfRows=20&pageNo=1&
+def Detailurl(contentid):
+    global server, regKey, conn
+    uri = userDetailURIBuilder(server, ServiceKey=regKey, contentId=contentid, defaultYN="Y", addrinfoYN="Y",
+                               overviewYN="Y", MobileOS="ETC", MobileApp="AppTesting")
+    return str(uri)
+
+def getDetailDataFromID(contentid):
+    global server,regKey,conn
+    if conn ==None:
+        connectOpenAPIServer()
+        #http://api.visitkorea.or.kr/openapi/service/rest/KorService/detailCommon?ServiceKey=서비스키&contentId=2456536&defaultYN=Y&addrinfoYN=Y&overviewYN=Y&MobileOS=ETC&MobileApp=AppTesting
+
+    uri = userDetailURIBuilder(server, ServiceKey=regKey,contentId=contentid,defaultYN="Y",addrinfoYN="Y",overviewYN="Y",  MobileOS="ETC", MobileApp="AppTesting")
+    print(uri)
+    conn.request("GET", uri)
+    req = conn.getresponse()
+    print(uri)
+#http://api.visitkorea.or.kr/openapi/service/rest/KorService/detailCommon?ServiceKey=nPSDIXgi3zg%2BhHUuuE6%2Fa3MirmFbhh%2BtwN1N8jRjCrs8dgXn8Wp3b9g190zHZGXqgo8DxqgcgK1fq2AjFXdJbg%3D%3D&contentId=2456536&defaultYN=Y&addrinfoYN=Y&overviewYN=Y&MobileOS=ETC&MobileApp=AppTesting
+    if int(req.status) == 200:
+        print("Detail Info downloading complete!")
+        return extractDetailData( req.read() )
+    else:
+        print("OpenAPI request has been failed!! please retry")
+        return None
+
+def getDataFromlike(sigungu,contentid,order):
+    global server, regKey, conn
+    if conn == None:
+        connectOpenAPIServer()
+
+    uri = userURIBuilder(server, ServiceKey=regKey, areaCode="1", sigunguCode=sigungu, numOfRows="500", arrange=order,MobileOS="ETC",
+                         MobileApp="AppTesting")
+
+    conn.request("GET", uri)
+    # http://api.visitkorea.or.kr/openapi/service/rest/KorService/areaBasedList?ServiceKey="서비스키"
+    # &contentTypeid=39&areaCode=1&sigunguCode=4&numOfRows=50&MobileOS=ETC&MobileApp=AppTesting
+    req = conn.getresponse()
+
+    # print(req.status)
+    if int(req.status) == 200:
+        print("Book data downloading complete!")
+        return extractBookData(req.read(), contentid)
+    else:
+        print("OpenAPI request has been failed!! please retry")
+        return None
+
+
 def getBookDataFromISBN(sigungu,contentid):
     global server, regKey, conn
     if conn == None:
@@ -48,7 +104,22 @@ def getBookDataFromISBN(sigungu,contentid):
         return None
 
 
-def extractBookData(strXml,contentid):
+def extractDetailData(strXml):
+    from xml.etree import ElementTree
+    tree = ElementTree.fromstring(strXml)
+    print(strXml)
+    itemElements = tree.getiterator("item")  # return list type
+    print(itemElements)
+
+    for item in itemElements:
+        overview = item.find("overview")
+        DetailDataList.append(overview.text)
+
+
+
+
+
+def extractBookData(strXml,typeID):
     from xml.etree import ElementTree
     tree = ElementTree.fromstring(strXml)
     print(strXml)
@@ -57,12 +128,8 @@ def extractBookData(strXml,contentid):
     print(itemElements)
     for item in itemElements:
         content=item.find("contenttypeid")
-       # print(content.text)
-        #print(contentid)
-       # title = item.find("title")
-       # DataList.append(title.text)
 
-        if str(content.text)==contentid:
+        if str(content.text)==typeID:
             id=item.find("contentid")
             title = item.find("title")
             tel = item.find("tel")
